@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: text2sql-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-text2sql_db}
+      MYSQL_USER: ${MYSQL_USER:-text2sql_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-text2sql_pass}
+    ports:
+      - "3306:3306"
+    volumes:
+      # Persistent storage
+      - mysql_data:/var/lib/mysql
+      
+      # Initialization scripts - will run in alphabetical order
+      - ./data/mysql/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./data/mysql/academic.sql:/docker-entrypoint-initdb.d/02-academic.sql
+      - ./data/mysql/imdb.sql:/docker-entrypoint-initdb.d/03-imdb.sql
+      - ./data/mysql/yelp.sql:/docker-entrypoint-initdb.d/04-yelp.sql
+      
+    command: 
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --max_connections=200
+      - --innodb_buffer_pool_size=256M
+    networks:
+      - text2sql_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root123}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MariaDB Database
+  mariadb:
+    image: mariadb:11.2
+    container_name: text2sql-mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-root123}
+      MYSQL_DATABASE: ${MARIADB_DATABASE:-text2sql_db}
+      MYSQL_USER: ${MARIADB_USER:-text2sql_user}
+      MYSQL_PASSWORD: ${MARIADB_PASSWORD:-text2sql_pass}
+    ports:
+      - "3307:3306"
+    volumes:
+      # Persistent storage
+      - mariadb_data:/var/lib/mysql
+      
+      # Same initialization scripts as MySQL για consistency
+      - ./data/mariadb/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./data/mariadb/academic.sql:/docker-entrypoint-initdb.d/02-academic.sql
+      - ./data/mariadb/imdb.sql:/docker-entrypoint-initdb.d/03-imdb.sql
+      - ./data/mariadb/yelp.sql:/docker-entrypoint-initdb.d/04-yelp.sql
+      
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --max_connections=200
+    networks:
+      - text2sql_network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # phpMyAdmin for easy database management
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: text2sql-phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOSTS: mysql,mariadb
+      PMA_PORTS: 3306,3306
+      PMA_USER: root
+      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+      UPLOAD_LIMIT: 300M
+    ports:
+      - "8080:80"
+    networks:
+      - text2sql_network
+    depends_on:
+      - mysql
+      - mariadb
+
+volumes:
+  mysql_data:
+    driver: local
+  mariadb_data:
+    driver: local
+
+networks:
+  text2sql_network:
+    driver: bridge

@@ -1,44 +1,76 @@
 # setup.ps1 - Complete Windows setup script
 # Run as: .\setup.ps1
 
+function Info($msg)  { Write-Host "[Info]   $msg" -ForegroundColor Cyan }
+function Ok($msg)    { Write-Host "[OK]   $msg" -ForegroundColor Green }
+function Warn($msg)  { Write-Host "[Warn]   $msg" -ForegroundColor Yellow }
+function Fail($msg)  { Write-Host "[Fail]   $msg" -ForegroundColor Red }
+
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Text2SQL Project Setup (Windows)" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
+# ----------------------------
 # Step 1: Check prerequisites
+# ----------------------------
 Write-Host "Step 1: Checking prerequisites..." -ForegroundColor Yellow
 
 # Check Docker
 try {
     $dockerVersion = docker --version
-    Write-Host "   Docker installed: $dockerVersion" -ForegroundColor Green
+    Ok "Docker found: $dockerVersion"
 } catch {
-    Write-Host "   Docker not found! Please install Docker Desktop." -ForegroundColor Red
+    Fail "Docker not found! Please install Docker Desktop."
     exit 1
 }
 
-# Check Docker Compose
+# Check Docker Compose, fallback to docker-compose if needed
+$ComposeCmd = $null
 try {
-    $composeVersion = docker-compose --version
-    Write-Host "   Docker Compose: $composeVersion" -ForegroundColor Green
+    docker compose version | Out-Null
+    $ComposeCmd = @("docker", "compose")
+    Ok "Docker Compose plugin available: docker compose"
 } catch {
-    Write-Host "   Docker Compose not found!" -ForegroundColor Red
-    exit 1
+    try {
+        docker-compose --version | Out-Null
+        $ComposeCmd = @("docker-compose")
+        Ok "Legacy docker-compose available"
+    } catch {
+        Fail "Neither 'docker compose' nor 'docker-compose' found."
+        exit 1
+    }
 }
 
 # Check Python
 try {
-    $pythonVersion = python --version
-    Write-Host "   Python: $pythonVersion" -ForegroundColor Green
+    $pythonVersion = python3 --version
+    Ok "Python: $pythonVersion" -ForegroundColor Green
 } catch {
-    Write-Host "   Python not found! Please install Python 3.8+." -ForegroundColor Red
+    Fail "Python not found! Please install Python 3.8+."
     exit 1
 }
 
+# ----------------------------
 # Step 2: Create directory structure
+# ----------------------------
 Write-Host ""
 Write-Host "Step 2: Creating directory structure..." -ForegroundColor Yellow
+
+# Create runtime directories
+$runtimeDirs = @(
+    "data\processed",
+    "results"
+)
+
+foreach ($dir in $runtimeDirs) {
+    if (!(Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        Ok "Created: $dir"
+    } else {
+        Info "Exists: $dir"
+    }
+}
 
 $directories = @(
     "data\mysql",
@@ -56,51 +88,69 @@ $directories = @(
 foreach ($dir in $directories) {
     if (!(Test-Path $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
-        Write-Host "   Created: $dir" -ForegroundColor Green
+        Ok "Created: $dir"
     } else{
-        Write-Host "   Exists: $dir" -ForegroundColor Gray
+        Info "Exists: $dir"
     }
 }
 
-# Step 3: Create .env file if not exists
+# ----------------------------
+# Step 3: Create/validate .env
+# ----------------------------
 Write-Host ""
 Write-Host "Step 3: Checking .env file..." -ForegroundColor Yellow
 
 if (!(Test-Path ".env")) {
     $envContent = @"
 # Database credentials
+
+# MySQL
 MYSQL_ROOT_PASSWORD=root123
 MYSQL_DATABASE=text2sql_db
 MYSQL_USER=text2sql_user
 MYSQL_PASSWORD=text2sql_pass
 
+# MariaDB
 MARIADB_ROOT_PASSWORD=root123
 MARIADB_DATABASE=text2sql_db
 MARIADB_USER=text2sql_user
 MARIADB_PASSWORD=text2sql_pass
+
+# Dataset paths
+DATASETS_SOURCE_PATH=./datasets_source/data
+PROCESSED_DATA_PATH=./data/processed
 "@
     $envContent | Out-File -FilePath ".env" -Encoding UTF8
-    Write-Host "   Created .env file" -ForegroundColor Green
+    Ok "Created .env file"
 } else {
-    Write-Host "   .env file exists" -ForegroundColor Gray
+    Info ".env file exists"
 }
 
-# Step 4: Create virtual environment
+# ----------------------------
+# Step 4: Python venv + deps
+# ----------------------------
 Write-Host ""
 Write-Host "Step 4: Setting up Python virtual environment..." -ForegroundColor Yellow
 
-if (!(Test-Path "venv")) {
-    python -m venv venv
-    Write-Host "   Virtual environment created" -ForegroundColor Green
+$venvPath = "venv"
+$venvPython = Join-Path $venvPath "Scripts\python.exe"
+$venvPip    = Join-Path $venvPath "Scripts\pip.exe"
+
+if (!(Test-Path $venvPython)) {
+    & python3 -m venv $venvPath
+    Ok "Virtual environment created at .\$venvPath"
 } else {
-    Write-Host "   Virtual environment exists" -ForegroundColor Gray
+    Info "Virtual environment exists at .\$venvPath"
 }
 
-# Activate and install packages
-Write-Host "   Installing Python packages..." -ForegroundColor Yellow
+# Upgrade pip
+Info "Upgrading pip..."
+& $venvPython -m pip install --upgrade pip | Out-Null
+Ok "pip upgraded"
 
-# Ensure pip is upgraded first
-& .\venv\Scripts\python.exe -m pip install --upgrade pip | Out-Null
+# Install dependencies
+Write-Host ""
+Write-Host "Step 4b: Installing Python dependencies..." -ForegroundColor Yellow
 
 $packages = @(
     "pymysql",
@@ -111,56 +161,139 @@ $packages = @(
     "tqdm"
 )
 
-foreach ($package in $packages) {
-    Write-Host "   ...installing $package" -NoNewline
-    & .\venv\Scripts\python.exe -m pip install -q $package
-    Write-Host " Done" -ForegroundColor Green
+if (Test-Path "requirements.txt") {
+    Info "Installing from requirements.txt (recommended for reproducibility)..."
+    & $venvPython -m pip install -r requirements.txt
+    Ok "Installed dependencies from requirements.txt"
+} else {
+    Warn "requirements.txt not found. Installing minimal deps..."
+    & $venvPython -m pip install @packages
+    Ok "Installed minimal dependencies"
 }
-Write-Host "   Python packages installed" -ForegroundColor Green
 
+
+# ----------------------------
 # Step 5: Download datasets
+# ----------------------------
 Write-Host ""
 Write-Host "Step 5: Downloading text2sql datasets..." -ForegroundColor Yellow
 
 if (Test-Path "scripts\download_datasets.py") {
-    & .\venv\Scripts\python.exe scripts\download_datasets.py
+    Info "Running download_datasets.py..."
+    & $venvPython scripts\download_datasets.py
+    Ok "Datasets download step complete"
 } else {
-    Write-Host "   download_datasets.py not found, skipping..." -ForegroundColor Yellow
+    Warn "scripts\download_datasets.py not found, skipping..."
 }
 
+# ----------------------------
 # Step 6: Extract schemas
+# ----------------------------
 Write-Host ""
 Write-Host "Step 6: Extracting database schemas..." -ForegroundColor Yellow
 
 if (Test-Path "scripts\extract_schemas.py") {
-    & .\venv\Scripts\python.exe scripts\extract_schemas.py
+    Info "Running extract_schemas.py..."
+    & $venvPython scripts\extract_schemas.py
+    Ok "Database schema extraction complete"
 } else {
-    Write-Host "   extract_schemas.py not found, skipping..." -ForegroundColor Yellow
+    Warn "scripts\extract_schemas.py not found, skipping..."
 }
 
-# Step 7: Start Docker containers
+# ----------------------------
+# Step 7.a: Start Docker containers
+# ----------------------------
 Write-Host ""
 Write-Host "Step 7: Starting Docker containers..." -ForegroundColor Yellow
 
-docker-compose up -d
+# Start Docker services
+try {
+    if ($ComposeCmd.Length -eq 2) {
+        & $ComposeCmd[0] $ComposeCmd[1] up -d
+    } else {
+        & $ComposeCmd[0] up -d
+    }
+    Ok "Docker services started"
+} catch {
+    Fail "Failed to start Docker services."
+    throw
+}
 
-Write-Host "   Waiting for database initialization (30 seconds)..." -ForegroundColor Yellow
-Start-Sleep -Seconds 30
+# ----------------------------
+# Step 7.b: Wait for healthchecks
+# ----------------------------
+Write-Host ""
+Write-Host "Step 7: Waiting for databases to become healthy..." -ForegroundColor Yellow
 
-# Check status
-docker-compose ps
 
+function Get-ContainerHealth($name) {
+    try {
+        $status = docker inspect -f '{{.State.Health.Status}}' $name 2>$null
+        return $status.Trim()
+    } catch {
+        return ""
+    }
+}
+
+$mysqlName   = "text2sql-mysql"
+$mariadbName = "text2sql-mariadb"
+
+$timeoutSec = 180
+$pollSec = 5
+$elapsed = 0
+
+while ($true) {
+    $mysqlHealth = Get-ContainerHealth $mysqlName
+    $mariaHealth = Get-ContainerHealth $mariadbName
+
+    $mysqlShown = if ([string]::IsNullOrWhiteSpace($mysqlHealth)) { "<unknown>" } else { $mysqlHealth }
+    $mariaShown = if ([string]::IsNullOrWhiteSpace($mariaHealth)) { "<unknown>" } else { $mariaHealth }
+
+    Info ("MySQL health:   $mysqlShown")
+    Info ("MariaDB health: $mariaShown")
+
+
+    if ($mysqlHealth -eq "healthy" -and $mariaHealth -eq "healthy") {
+        Ok "Both databases are healthy"
+        break
+    }
+
+    if ($elapsed -ge $timeoutSec) {
+        Fail "Timed out waiting for database healthchecks ($timeoutSec seconds)."
+        Write-Host ""
+        Write-Host "---- docker compose ps ----" -ForegroundColor Yellow
+        if ($ComposeCmd.Length -eq 2) { & $ComposeCmd[0] $ComposeCmd[1] ps } else { & $ComposeCmd[0] ps }
+
+        Write-Host ""
+        Write-Host "---- mysql logs (tail) ----" -ForegroundColor Yellow
+        docker logs --tail 120 $mysqlName
+
+        Write-Host ""
+        Write-Host "---- mariadb logs (tail) ----" -ForegroundColor Yellow
+        docker logs --tail 120 $mariadbName
+
+        exit 1
+    }
+
+    Start-Sleep -Seconds $pollSec
+    $elapsed += $pollSec
+}
+
+# ----------------------------
 # Step 8: Test connections
+# ----------------------------
 Write-Host ""
 Write-Host "Step 8: Testing database connections..." -ForegroundColor Yellow
 
 if (Test-Path "scripts\test_connections.py") {
-    & .\venv\Scripts\python.exe scripts\test_connections.py
+    & $venvPython scripts\test_connections.py
 } else {
-    Write-Host "   test_connections.py not found, skipping..." -ForegroundColor Yellow
+    Warn "\scripts\test_connections.py not found, skipping..." -ForegroundColor Yellow
 }
 
+# ----------------------------
 # Summary
+# ----------------------------
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Setup Complete!" -ForegroundColor Green

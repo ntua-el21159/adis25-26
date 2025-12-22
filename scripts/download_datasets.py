@@ -128,7 +128,7 @@ def analyze_dataset(data, name):
 def main():
     """Main download function"""
     print("🚀 Text2SQL Dataset Downloader")
-    print("=" * 60)
+    print("=" * 60) 
 
     # Create directories
     output_dir = Path("datasets_source/data")

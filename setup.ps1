@@ -180,7 +180,7 @@ Write-Host "Step 5: Downloading text2sql datasets..." -ForegroundColor Yellow
 
 if (Test-Path "scripts\download_datasets.py") {
     Info "Running download_datasets.py..."
-    & $venvPython scripts\download_datasets.py
+    & $venvPython scripts\download_datasets_copy.py
     Ok "Datasets download step complete"
 } else {
     Warn "scripts\download_datasets.py not found, skipping..."
@@ -194,7 +194,7 @@ Write-Host "Step 6: Extracting database schemas..." -ForegroundColor Yellow
 
 if (Test-Path "scripts\extract_schemas.py") {
     Info "Running extract_schemas.py..."
-    & $venvPython scripts\extract_schemas.py
+    & $venvPython scripts\extract_schemas_copy.py
     Ok "Database schema extraction complete"
 } else {
     Warn "scripts\extract_schemas.py not found, skipping..."

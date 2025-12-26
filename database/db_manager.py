@@ -1,6 +1,6 @@
 """
 database/db_manager.py
-Enhanced database manager με support for text2sql datasets
+Enhanced database manager with support for text2sql datasets
 """
 
 import pandas as pd
@@ -9,6 +9,8 @@ import json
 from pathlib import Path
 from sqlalchemy import text, inspect
 from database.connection import get_engine
+import re
+from sqlalchemy import inspect
 
 class DatabaseManager:
     """Enhanced database manager for text2sql experiments"""
@@ -165,7 +167,82 @@ class DatabaseManager:
             raise ValueError(f"Unknown dataset: {dataset_name}")
         
         return self.get_schema(db_name)
-    
+        
+    def get_compact_schema(
+        self,
+        database=None,
+        include_types: bool = False,
+        max_tables: int | None = None,
+        question: str | None = None,
+    ) -> str:
+        """
+        Return a compact schema string:
+        table_name(col1, col2, col3)
+
+        Options:
+        - include_types: table(col1 TYPE, col2 TYPE, ...)
+        - question: if provided, filter tables by keyword overlap (simple heuristic)
+        - max_tables: cap number of tables (after filtering)
+        """
+        if database:
+            self.switch_database(database)
+
+        inspector = inspect(self.engine)
+        tables = inspector.get_table_names()
+
+        # Optional filtering by question keywords
+        #if question:
+        #    tables = self._filter_tables_by_question(inspector, tables, question)
+
+        if max_tables is not None:
+            tables = tables[:max_tables]
+
+        lines = []
+        for table in tables:
+            cols = inspector.get_columns(table)
+
+            if include_types:
+                col_str = ", ".join(f"{c['name']} {str(c['type'])}" for c in cols)
+            else:
+                col_str = ", ".join(c["name"] for c in cols)
+
+            lines.append(f"{table}({col_str})")
+
+        return "\n".join(lines)
+
+
+    def _filter_tables_by_question(self, inspector, tables: list[str], question: str) -> list[str]:
+        """
+        Very simple relevance heuristic:
+        score(table) = overlap(question_tokens, table_name_tokens ∪ column_name_tokens)
+        Return tables sorted by score (desc), keeping nonzero matches; fallback to all tables.
+        """
+        q_tokens = set(re.findall(r"[a-zA-Z_]+", question.lower()))
+        if not q_tokens:
+            return tables
+
+        scored = []
+        for t in tables:
+            t_tokens = set(re.findall(r"[a-zA-Z_]+", t.lower()))
+
+            # include column tokens too (lightweight but useful)
+            try:
+                cols = inspector.get_columns(t)
+                for c in cols:
+                    t_tokens.update(re.findall(r"[a-zA-Z_]+", c["name"].lower()))
+            except Exception:
+                pass
+
+            score = len(q_tokens.intersection(t_tokens))
+            scored.append((score, t))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+
+        filtered = [t for s, t in scored if s > 0]
+
+        # Fallback: if nothing matched, return all tables (don’t hide schema)
+        return filtered if filtered else tables   
+
     def switch_database(self, database):
         """Switch to different database"""
         self.database = database

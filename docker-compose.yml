@@ -48,7 +48,7 @@ services:
       MYSQL_USER: ${MARIADB_USER:-text2sql_user}
       MYSQL_PASSWORD: ${MARIADB_PASSWORD:-text2sql_pass}
     ports:
-      - "3307:3306"
+      - "3307:3307"
     volumes:
       # Persistent storage
       - mariadb_data:/var/lib/mysql
@@ -78,7 +78,7 @@ services:
     restart: unless-stopped
     environment:
       PMA_HOSTS: mysql,mariadb
-      PMA_PORTS: 3306,3306
+      PMA_PORTS: 3306,3307
       PMA_USER: root
       PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
       UPLOAD_LIMIT: 300M

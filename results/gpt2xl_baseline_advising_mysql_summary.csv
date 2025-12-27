@@ -1,0 +1,3 @@
+both_success_rate,breakdown,bucket,dataset,gen_time_mean_s,gen_time_median_s,gen_time_p90_s,mariadb_ex_given_success,mariadb_exec_time_mean_s,mariadb_exec_time_median_s,mariadb_execution_accuracy_ex,mariadb_only_success_rate,mariadb_pred_success_rate,mysql_ex_given_success,mysql_exec_time_mean_s,mysql_exec_time_median_s,mysql_execution_accuracy_ex,mysql_only_success_rate,mysql_pred_success_rate,mysql_vs_mariadb_match_rate,n_questions,neither_success_rate,schema_tables_mean,schema_tables_median
+0.0,,,advising,84.58776206896552,83.5956,86.8459,,,,0.0,0.0,0.0,0.0,0.026892855249602218,0.023242950439453125,0.0,0.0,0.5689655172413793,,58,0.0,12.0,12.0
+,complexity,simple,advising,,,,,,,0.0,,0.0,,,,0.0,,0.5689655172413793,,58,,,

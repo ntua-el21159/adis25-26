@@ -27,3 +27,24 @@ beyond the minimum requirements by designing additional experiments,
 such as introducing multiple levels of query complexity. In this step, teams
 should ensure that comparisons are based on meaningful and statistically
 valid results.
+
+# 1. Run setup script
+.\setup.ps1
+
+# OR manual steps:
+
+# 2. Download datasets
+python scripts\download_datasets.py
+
+# 3. Extract schemas
+python scripts\extract_schemas.py
+
+# 4. Start databases
+.\start_databases.bat
+# OR: docker-compose up -d
+
+# 5. Test connections
+python scripts\test_connections.py
+
+# 6. Test datasets
+python scripts\test_datasets.py 

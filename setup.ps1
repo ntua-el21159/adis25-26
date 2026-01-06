@@ -174,19 +174,6 @@ if (Test-Path "scripts\download_datasets.py") {
     Warn "scripts\download_datasets.py not found, skipping..."
 }
 
-# ----------------------------
-# Step 6: Extract schemas
-# ----------------------------
-Write-Host ""
-Write-Host "Step 6: Extracting database schemas..." -ForegroundColor Yellow
-
-if (Test-Path "scripts\extract_schemas.py") {
-    Info "Running extract_schemas.py..."
-    & $venvPython scripts\extract_schemas_copy.py
-    Ok "Database schema extraction complete"
-} else {
-    Warn "scripts\extract_schemas.py not found, skipping..."
-}
 
 # ----------------------------
 # Step 7.a: Start Docker containers
@@ -266,6 +253,21 @@ while ($true) {
     Start-Sleep -Seconds $pollSec
     $elapsed += $pollSec
 }
+
+# ----------------------------
+# Step 6: Extract schemas
+# ----------------------------
+Write-Host ""
+Write-Host "Step 6: Extracting database schemas..." -ForegroundColor Yellow
+
+if (Test-Path "scripts\extract_schemas.py") {
+    Info "Running extract_schemas.py..."
+    & $venvPython scripts\extract_schemas_copy.py
+    Ok "Database schema extraction complete"
+} else {
+    Warn "scripts\extract_schemas.py not found, skipping..."
+}
+
 
 # ----------------------------
 # Step 8: Test connections

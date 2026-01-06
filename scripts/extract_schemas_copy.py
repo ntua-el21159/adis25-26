@@ -44,6 +44,9 @@ DATASET_SQL_SOURCES: Dict[str, Dict] = {
 
 
     # TODO: add more datasets here
+    # download .tgz from drive (https://drive.google.com/file/d/11qRUfkEVj7Lapa9ypPfwrDGUFsJRsVx9/view?usp=sharing)
+    # extract all .sql files
+    # and pick the right one for each dataset
     # Example: zip with members (e.g., Google Drive zip)
     # "academic": {
     #     "type": "zip",
